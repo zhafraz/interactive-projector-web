@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Interactive Projector</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <video id="webcam" autoplay playsinline style="display: none"></video>
+    <div style="position: fixed; left: 12px;color: white;">
+      <p id="status" style="display: block;"></p>
+      <p id="status2" style="display: block;"></p>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
+    <script>
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const statusEl = document.querySelector('#status');
+
+      const listModel = [
+        '/public/assets/realistic_human_heart.glb', 
+        '/public/assets/respiratory_system.glb', 
+        '/public/assets/lever_mudbox.glb', 
+        '/public/assets/intestine.glb', 
+      ];
+      let selectedModel = -1
+
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Add lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Soft white light
+      scene.add(ambientLight);
+
+      const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+      pointLight.position.set(10, 10, 10);
+      scene.add(pointLight);
+
+      // const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      // controls.enableZoom = true; // Enable zooming
+      // controls.zoomSpeed = 2.0;
+
+      //   const geometry = new THREE.BoxGeometry();
+      //   const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      //   const cube = new THREE.Mesh(geometry, material);
+      //   scene.add(cube);
+
+      // Load GLB model
+      let model;
+      // const loader = new THREE.GLTFLoader();
+      // loader.load(
+      //     '/public/assets/realistic_human_heart.glb', // Replace with the path to your .glb file
+      //     function (gltf) {
+      //         model = gltf.scene;
+      //         scene.add(model);
+      //     },
+      //     function (xhr) {
+      //         console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+      //     },
+      //     function (error) {
+      //         console.error('An error happened', error);
+      //     }
+      // );
+      
+      nextModel();
+
+      camera.position.z = 5;
+      renderer.render(scene, camera);
+
+      function loadModel(modelPath) {
+        statusEl.innerHTML = 'Loading Model...';
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+          modelPath,
+          function (gltf) {
+            statusEl.innerHTML = '';
+
+            // Remove previous model from scene
+            if (scene.children.length > 0) {
+              const previousModel = scene.children.find((child) => child.type === 'Group');
+              if (previousModel) {
+                scene.remove(previousModel);
+              }
+            }
+            model = null;
+            // Add new model to the scene
+            model = gltf.scene;
+            model.position.set(0, 0, 0);
+            scene.add(model);
+          },
+          function (xhr) {
+            console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
+          },
+          function (error) {
+            console.error('An error happened', error);
+          }
+        );
+      }
+
+      function nextModel() {
+        selectedModel += 1;
+        if (selectedModel > listModel.length - 1) {
+          selectedModel  = 0
+          loadModel(listModel[selectedModel]);
+        } else {
+          loadModel(listModel[selectedModel]);
+        }
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        // controls.update();
+        // cube.rotation.x += 0.01;
+        // cube.rotation.y += 0.01;
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      function rotate() {
+        // cube.rotation.x += 0.1;
+        // cube.rotation.y += 0.1;
+        model.rotation.set(model.rotation.x, model.rotation.y + 0.1, model.rotation.z);
+        renderer.render(scene, camera);
+      }
+
+      function rotateUp() {
+        model.rotation.set(model.rotation.x + 0.1, model.rotation.y, model.rotation.z);
+        renderer.render(scene, camera);
+      }
+
+      function zoomCamera(sum) {
+        camera.position.z += sum;
+      }
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.render(scene, camera);
+      });
+    </script>
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
