@@ -1,167 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Interactive Projector</title>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-        font-family: Arial, sans-serif;
-      }
-      canvas {
-        display: block;
-      }
-      #overlay {
-        position: fixed;
-        left: 12px;
-        top: 12px;
-        color: white;
-        z-index: 10;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 10px;
-        border-radius: 8px;
-      }
-      #btnCam {
-        margin-top: 10px;
-        padding: 8px 16px;
-        font-size: 14px;
-        cursor: pointer;
-      }
-    </style>
-  </head>
-  <body>
-    <video id="webcam" autoplay playsinline style="display: none"></video>
+<head>
+  <meta charset="UTF-8" />
+  <title>Interactive Projector</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    #overlay {
+      position: fixed;
+      left: 12px;
+      top: 12px;
+      color: black;
+      z-index: 10;
+      background: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    #btnCam {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <video id="webcam" autoplay playsinline style="display: none"></video>
 
-    <!-- Status & Button -->
-    <div id="overlay">
-      <p id="status">Loading...</p>
-      <p id="status2">Silakan aktifkan kamera</p>
-      <button id="btnCam" onclick="enableCam()">Aktifkan Kamera</button>
-    </div>
+  <div id="overlay">
+    <p id="status">Loading...</p>
+    <p id="status2">Silakan aktifkan kamera</p>
+    <button id="btnCam" onclick="toggleCam()">Aktifkan Kamera</button>
+  </div>
 
-    <!-- THREE.js & GLTF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
+  <!-- THREE.js & GLTF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
 
-    <script>
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
-      const statusEl = document.getElementById('status');
-      const status2 = document.getElementById('status2');
-      const video = document.getElementById("webcam");
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#f9f9f9'); // ⬅️ Ubah background
 
-      const listModel = [
-        'assets/realistic_human_heart.glb',
-        'assets/respiratory_system.glb',
-        'assets/lever_mudbox.glb',
-        'assets/intestine.glb',
-      ];
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-      let selectedModel = -1;
-      let model;
-      let webcamRunning = false;
+    const statusEl = document.getElementById("status");
+    const status2 = document.getElementById("status2");
+    const video = document.getElementById("webcam");
+    const btnCam = document.getElementById("btnCam");
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+    const listModel = [
+      'assets/realistic_human_heart.glb',
+      'assets/respiratory_system.glb',
+      'assets/lever_mudbox.glb',
+      'assets/intestine.glb',
+    ];
 
-      // Lighting
-      scene.add(new THREE.AmbientLight(0xffffff, 1));
-      const light = new THREE.PointLight(0xffffff, 1, 100);
-      light.position.set(10, 10, 10);
-      scene.add(light);
+    let selectedModel = -1;
+    let model;
+    let stream = null;
+    window.webcamRunning = false;
 
-      camera.position.z = 5;
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 1));
+    const light = new THREE.PointLight(0xffffff, 1, 100);
+    light.position.set(10, 10, 10);
+    scene.add(light);
 
-      function loadModel(path) {
-        statusEl.textContent = 'Loading Model...';
-        const loader = new THREE.GLTFLoader();
-        loader.load(
-          path,
-          gltf => {
-            statusEl.textContent = '';
-            const prev = scene.children.find(c => c.type === 'Group');
-            if (prev) scene.remove(prev);
-            model = gltf.scene;
-            model.position.set(0, 0, 0);
-            scene.add(model);
-          },
-          xhr => {
-            console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
-          },
-          err => {
-            console.error('Model load error', err);
-          }
-        );
-      }
+    camera.position.z = 5;
 
-      function nextModel() {
-        selectedModel++;
-        if (selectedModel >= listModel.length) selectedModel = 0;
-        loadModel(listModel[selectedModel]);
-      }
-
-      function rotate() {
-        if (!model) return;
-        model.rotation.y += 0.1;
-      }
-
-      function rotateUp() {
-        if (!model) return;
-        model.rotation.x += 0.1;
-      }
-
-      function zoomCamera(delta) {
-        camera.position.z += delta;
-      }
-
-      // GLOBAL
-      window.rotate = rotate;
-      window.rotateUp = rotateUp;
-      window.zoomCamera = zoomCamera;
-      window.nextModel = nextModel;
-
-      // ENABLE CAM FUNCTION
-      window.enableCam = async function () {
-        if (webcamRunning) return;
-
-        webcamRunning = true;
-        status2.textContent = "Mengaktifkan kamera...";
-
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          video.srcObject = stream;
-          video.play();
-          status2.textContent = "Kamera aktif. Gesture siap digunakan!";
-        } catch (err) {
-          console.error("Gagal mengakses kamera:", err);
-          status2.textContent = "Gagal mengakses kamera.";
+    function loadModel(path) {
+      statusEl.textContent = 'Loading Model...';
+      const loader = new THREE.GLTFLoader();
+      loader.load(
+        path,
+        gltf => {
+          statusEl.textContent = '';
+          const prev = scene.children.find(c => c.type === 'Group');
+          if (prev) scene.remove(prev);
+          model = gltf.scene;
+          model.position.set(0, 0, 0);
+          scene.add(model);
+        },
+        xhr => {
+          console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
+        },
+        err => {
+          console.error('Model load error', err);
         }
-      };
+      );
+    }
 
-      function animate() {
-        requestAnimationFrame(animate);
-        renderer.render(scene, camera);
+    function nextModel() {
+      selectedModel++;
+      if (selectedModel >= listModel.length) selectedModel = 0;
+      loadModel(listModel[selectedModel]);
+    }
+
+    function rotate() {
+      if (model) model.rotation.y += 0.1;
+    }
+
+    function rotateUp() {
+      if (model) model.rotation.x += 0.1;
+    }
+
+    function zoomCamera(delta) {
+      camera.position.z += delta;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Global untuk gesture
+    window.rotate = rotate;
+    window.rotateUp = rotateUp;
+    window.zoomCamera = zoomCamera;
+    window.nextModel = nextModel;
+
+    // Aktif/Nonaktif kamera
+    window.toggleCam = async function () {
+      if (window.webcamRunning) {
+        const tracks = stream?.getTracks();
+        if (tracks) tracks.forEach(track => track.stop());
+        video.srcObject = null;
+        btnCam.textContent = "Aktifkan Kamera";
+        status2.textContent = "Kamera dinonaktifkan.";
+        window.webcamRunning = false;
+        return;
       }
 
-      animate();
-      nextModel();
+      try {
+        status2.textContent = "Mengaktifkan kamera...";
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        await video.play();
+        btnCam.textContent = "Nonaktifkan Kamera";
+        status2.textContent = "Kamera aktif. Gesture siap!";
+        window.webcamRunning = true;
+        if (typeof predictWebcam === 'function') {
+          window.requestAnimationFrame(predictWebcam);
+        }
+      } catch (e) {
+        status2.textContent = "Gagal mengakses kamera.";
+        console.error(e);
+      }
+    };
 
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-    </script>
+    animate();
+    nextModel();
+  </script>
 
-    <!-- Gesture recognizer -->
-    <script type="module" src="./script.js"></script>
-  </body>
+  <!-- Gesture recognition logic -->
+  <script type="module" src="./script.js"></script>
+</body>
 </html>
