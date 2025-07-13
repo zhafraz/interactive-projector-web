@@ -1,30 +1,61 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <title>Interactive Projector</title>
     <style>
       body {
         margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
       }
       canvas {
         display: block;
+      }
+      #overlay {
+        position: fixed;
+        left: 12px;
+        top: 12px;
+        color: white;
+        z-index: 10;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 8px;
+      }
+      #btnCam {
+        margin-top: 10px;
+        padding: 8px 16px;
+        font-size: 14px;
+        cursor: pointer;
       }
     </style>
   </head>
   <body>
     <video id="webcam" autoplay playsinline style="display: none"></video>
-    <div style="position: fixed; left: 12px;color: white;">
-      <p id="status" style="display: block;"></p>
-      <p id="status2" style="display: block;"></p>
+
+    <!-- Status & Button -->
+    <div id="overlay">
+      <p id="status">Loading...</p>
+      <p id="status2">Silakan aktifkan kamera</p>
+      <button id="btnCam" onclick="enableCam()">Aktifkan Kamera</button>
     </div>
+
+    <!-- THREE.js & GLTF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
+
     <script>
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      const statusEl = document.querySelector('#status');
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      const statusEl = document.getElementById('status');
+      const status2 = document.getElementById('status2');
+      const video = document.getElementById("webcam");
 
       const listModel = [
         'assets/realistic_human_heart.glb',
@@ -33,123 +64,104 @@
         'assets/intestine.glb',
       ];
 
-      let selectedModel = -1
+      let selectedModel = -1;
+      let model;
+      let webcamRunning = false;
 
-      const renderer = new THREE.WebGLRenderer();
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      // Add lighting
-      const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Soft white light
-      scene.add(ambientLight);
-
-      const pointLight = new THREE.PointLight(0xffffff, 1, 100);
-      pointLight.position.set(10, 10, 10);
-      scene.add(pointLight);
-
-      // const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      // controls.enableZoom = true; // Enable zooming
-      // controls.zoomSpeed = 2.0;
-
-      //   const geometry = new THREE.BoxGeometry();
-      //   const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      //   const cube = new THREE.Mesh(geometry, material);
-      //   scene.add(cube);
-
-      // Load GLB model
-      let model;
-      // const loader = new THREE.GLTFLoader();
-      // loader.load(
-      //     '/public/assets/realistic_human_heart.glb', // Replace with the path to your .glb file
-      //     function (gltf) {
-      //         model = gltf.scene;
-      //         scene.add(model);
-      //     },
-      //     function (xhr) {
-      //         console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-      //     },
-      //     function (error) {
-      //         console.error('An error happened', error);
-      //     }
-      // );
-      
-      nextModel();
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffffff, 1));
+      const light = new THREE.PointLight(0xffffff, 1, 100);
+      light.position.set(10, 10, 10);
+      scene.add(light);
 
       camera.position.z = 5;
-      renderer.render(scene, camera);
 
-      function loadModel(modelPath) {
-        statusEl.innerHTML = 'Loading Model...';
+      function loadModel(path) {
+        statusEl.textContent = 'Loading Model...';
         const loader = new THREE.GLTFLoader();
         loader.load(
-          modelPath,
-          function (gltf) {
-            statusEl.innerHTML = '';
-
-            // Remove previous model from scene
-            if (scene.children.length > 0) {
-              const previousModel = scene.children.find((child) => child.type === 'Group');
-              if (previousModel) {
-                scene.remove(previousModel);
-              }
-            }
-            model = null;
-            // Add new model to the scene
+          path,
+          gltf => {
+            statusEl.textContent = '';
+            const prev = scene.children.find(c => c.type === 'Group');
+            if (prev) scene.remove(prev);
             model = gltf.scene;
             model.position.set(0, 0, 0);
             scene.add(model);
           },
-          function (xhr) {
+          xhr => {
             console.log((xhr.loaded / xhr.total) * 100 + '% loaded');
           },
-          function (error) {
-            console.error('An error happened', error);
+          err => {
+            console.error('Model load error', err);
           }
         );
       }
 
       function nextModel() {
-        selectedModel += 1;
-        if (selectedModel > listModel.length - 1) {
-          selectedModel  = 0
-          loadModel(listModel[selectedModel]);
-        } else {
-          loadModel(listModel[selectedModel]);
-        }
+        selectedModel++;
+        if (selectedModel >= listModel.length) selectedModel = 0;
+        loadModel(listModel[selectedModel]);
       }
-
-      function animate() {
-        requestAnimationFrame(animate);
-        // controls.update();
-        // cube.rotation.x += 0.01;
-        // cube.rotation.y += 0.01;
-        renderer.render(scene, camera);
-      }
-      animate();
 
       function rotate() {
-        // cube.rotation.x += 0.1;
-        // cube.rotation.y += 0.1;
-        model.rotation.set(model.rotation.x, model.rotation.y + 0.1, model.rotation.z);
-        renderer.render(scene, camera);
+        if (!model) return;
+        model.rotation.y += 0.1;
       }
 
       function rotateUp() {
-        model.rotation.set(model.rotation.x + 0.1, model.rotation.y, model.rotation.z);
+        if (!model) return;
+        model.rotation.x += 0.1;
+      }
+
+      function zoomCamera(delta) {
+        camera.position.z += delta;
+      }
+
+      // GLOBAL
+      window.rotate = rotate;
+      window.rotateUp = rotateUp;
+      window.zoomCamera = zoomCamera;
+      window.nextModel = nextModel;
+
+      // ENABLE CAM FUNCTION
+      window.enableCam = async function () {
+        if (webcamRunning) return;
+
+        webcamRunning = true;
+        status2.textContent = "Mengaktifkan kamera...";
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = stream;
+          video.play();
+          status2.textContent = "Kamera aktif. Gesture siap digunakan!";
+        } catch (err) {
+          console.error("Gagal mengakses kamera:", err);
+          status2.textContent = "Gagal mengakses kamera.";
+        }
+      };
+
+      function animate() {
+        requestAnimationFrame(animate);
         renderer.render(scene, camera);
       }
 
-      function zoomCamera(sum) {
-        camera.position.z += sum;
-      }
+      animate();
+      nextModel();
 
       window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.render(scene, camera);
       });
     </script>
+
+    <!-- Gesture recognizer -->
     <script type="module" src="./script.js"></script>
   </body>
 </html>
